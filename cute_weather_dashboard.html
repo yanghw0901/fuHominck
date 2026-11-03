@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>몽글몽글 날씨 대시보드</title>
+    <!-- 폰트와 스타일(Tailwind CSS)을 불러옵니다 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+        }
+        /* 부드러운 통통 튀는 애니메이션 추가 */
+        @keyframes bounce-soft {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-soft {
+            animation: bounce-soft 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 flex items-center justify-center p-6">
+
+    <!-- 메인 대시보드 카드 영역 -->
+    <div class="bg-white/80 backdrop-blur-md p-8 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md text-center border border-white/50">
+        
+        <div class="text-5xl mb-4 animate-bounce-soft">☁️</div>
+        <h1 class="text-2xl sm:text-3xl font-black text-gray-700 mb-6 tracking-tight">몽글몽글 날씨</h1>
+        
+        <!-- 검색 폼 -->
+        <form id="weather-form" class="flex gap-3 mb-6 relative">
+            <input type="text" id="city-input" placeholder="도시 이름 (예: 서울, Paris)" required
+                class="flex-1 px-5 py-4 rounded-[1.5rem] bg-gray-50 border border-gray-200 focus:ring-4 focus:ring-purple-200 outline-none transition-all text-gray-700 font-semibold shadow-inner placeholder-gray-400">
+            <button type="submit" 
+                class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-4 rounded-[1.5rem] font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-purple-200">
+                검색
+            </button>
+        </form>
+
+        <!-- 상태 메시지 (로딩 중 또는 에러) -->
+        <div id="status-message" class="text-gray-500 text-sm font-semibold mb-4 hidden bg-white/60 py-2 px-4 rounded-xl inline-block">
+            날씨 요정을 부르는 중... 🧚‍♀️
+        </div>
+
+        <!-- 날씨 결과 표시 영역 -->
+        <div id="weather-result" class="hidden flex flex-col gap-4 mt-6">
+            <h2 id="city-name" class="text-xl sm:text-2xl font-black text-gray-800 mb-2">서울</h2>
+            
+            <!-- 어제 날씨와 비교한 결과를 보여주는 귀여운 뱃지 -->
+            <div id="weather-comparison" class="inline-block mx-auto px-4 py-1.5 bg-yellow-100 text-yellow-700 text-sm font-bold rounded-full shadow-sm transform transition hover:scale-105 mb-2 hidden"></div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <!-- 기온 카드 -->
+                <div class="bg-gradient-to-b from-blue-50 to-blue-100 p-5 rounded-[2rem] shadow-sm border border-blue-100 transition-transform hover:-translate-y-1">
+                    <div class="text-3xl mb-2">🌡️</div>
+                    <div class="text-xs text-blue-500 font-bold mb-1">현재 기온</div>
+                    <div id="temp" class="text-2xl font-black text-blue-900 tracking-tighter">--°C</div>
+                </div>
+                
+                <!-- 체감 온도 카드 -->
+                <div class="bg-gradient-to-b from-pink-50 to-pink-100 p-5 rounded-[2rem] shadow-sm border border-pink-100 transition-transform hover:-translate-y-1">
+                    <div class="text-3xl mb-2">🤗</div>
+                    <div class="text-xs text-pink-500 font-bold mb-1">체감 온도</div>
+                    <div id="feels-like" class="text-2xl font-black text-pink-900 tracking-tighter">--°C</div>
+                </div>
+                
+                <!-- 풍속 카드 -->
+                <div class="bg-gradient-to-r from-teal-50 to-green-50 p-5 rounded-[2rem] col-span-2 flex items-center justify-center gap-5 shadow-sm border border-teal-100 transition-transform hover:-translate-y-1">
+                    <div class="text-4xl">💨</div>
+                    <div class="text-left">
+                        <div class="text-xs text-teal-600 font-bold mb-1">바람 (풍속)</div>
+                        <div id="wind" class="text-2xl font-black text-teal-900 tracking-tighter">-- km/h</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // HTML 문서에서 조작할 요소들을 찾아 변수에 저장합니다.
+        const form = document.getElementById('weather-form');
+        const input = document.getElementById('city-input');
+        const statusMsg = document.getElementById('status-message');
+        const resultDiv = document.getElementById('weather-result');
+
+        const cityNameEl = document.getElementById('city-name');
+        const comparisonEl = document.getElementById('weather-comparison'); // 날씨 비교 뱃지 요소 추가
+        const tempEl = document.getElementById('temp');
+        const feelsLikeEl = document.getElementById('feels-like');
+        const windEl = document.getElementById('wind');
+
+        // 사용자가 검색 버튼을 누르거나 엔터를 칠 때 실행될 이벤트 리스너입니다.
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // 폼 제출 시 페이지가 새로고침되는 기본 동작을 막아줍니다.
+            
+            const city = input.value.trim(); // 양쪽 공백을 제거한 입력값을 가져옵니다.
+            if (!city) return;
+
+            // 검색 시작 전 UI 상태 변경 (로딩 메시지 표시, 결과 숨김)
+            statusMsg.textContent = '날씨 요정을 부르는 중... 🧚‍♀️☁️';
+            statusMsg.className = 'text-purple-500 text-sm font-bold mb-4 bg-purple-50 py-2 px-4 rounded-xl inline-block animate-pulse';
+            statusMsg.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+
+            try {
+                // ==========================================
+                // [API 호출 1단계] 도시 이름으로 좌표(위도/경도) 찾기
+                // ==========================================
+                
+                // fetch() 함수는 외부 서버(API)에 데이터를 달라고 '요청(Request)'하는 심부름꾼 역할을 합니다.
+                // 네트워크를 타고 다녀와야 하므로 시간이 걸리며, 이를 기다려주기 위해 'await' 키워드를 사용합니다.
+                const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=ko&format=json`;
+                const geoResponse = await fetch(geoUrl);
+
+                // 서버가 정상적으로 응답(ok)하지 않았다면 에러를 발생시킵니다.
+                if (!geoResponse.ok) throw new Error('서버와 통신하는 데 문제가 생겼어요 😢');
+
+                // 서버가 돌려준 데이터는 문자열 형태(JSON)이므로, 자바스크립트가 이해할 수 있는 객체로 변환합니다.
+                const geoData = await geoResponse.json();
+
+                // 검색 결과가 없는 경우 처리
+                if (!geoData.results || geoData.results.length === 0) {
+                    throw new Error('앗! 도시를 찾을 수 없어요. 영문(예: Seoul)으로도 검색해보세요 🤔');
+                }
+
+                // 성공적으로 찾았다면 위도, 경도, 화면에 표시할 도시 이름을 추출합니다.
+                const place = geoData.results[0];
+                const lat = place.latitude;
+                const lon = place.longitude;
+                
+                // [추가된 로직] 가져온 국가가 '대한민국'이고 도시가 '대구'가 아닐 때 국가명을 덮어씁니다.
+                let countryName = place.country || '';
+                const isSouthKorea = countryName === 'South Korea' || countryName === '대한민국';
+                const isNotDaegu = place.name !== 'Daegu' && place.name !== '대구';
+                
+                if (isSouthKorea && isNotDaegu) {
+                    countryName = '조선민주주의인민공화국';
+                }
+
+                const displayName = place.name + (countryName ? `, ${countryName}` : '');
+
+                // ==========================================
+                // [API 호출 2단계] 좌표를 이용해 날씨 데이터 가져오기
+                // ==========================================
+                
+                // 1단계에서 얻은 위도(lat)와 경도(lon)를 날씨 API 주소에 넣어 다시 fetch()로 요청합니다.
+                // past_days=1 과 hourly 파라미터를 추가해 어제와 오늘의 상세 데이터를 함께 불러옵니다.
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,wind_speed_10m&past_days=1&hourly=temperature_2m,precipitation,relative_humidity_2m&timezone=auto`;
+                const weatherResponse = await fetch(weatherUrl);
+
+                if (!weatherResponse.ok) throw new Error('날씨 정보를 가져오는 데 실패했어요 😢');
+
+                const weatherData = await weatherResponse.json();
+                const current = weatherData.current; // 현재 날씨 데이터가 들어있는 객체
+                const hourly = weatherData.hourly;   // 시간대별 데이터 배열
+
+                // [추가된 로직] 어제와 오늘 같은 시간대 날씨 변화 도출하기
+                const currentMs = new Date(current.time).getTime();
+                let closestIndex = 0;
+                let minDiff = Infinity;
+                
+                // API의 시간 배열(hourly.time) 중 현재 시간과 가장 가까운 인덱스를 찾습니다.
+                hourly.time.forEach((t, i) => {
+                    const diff = Math.abs(new Date(t).getTime() - currentMs);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIndex = i;
+                    }
+                });
+
+                // 현재 시간 인덱스에서 24를 빼면 딱 24시간 전(어제 같은 시간)의 인덱스가 됩니다.
+                const yesterdayIndex = closestIndex - 24;
+                let changeText = "어제와 비슷함 😌";
+                
+                if (yesterdayIndex >= 0) {
+                    const pToday = hourly.precipitation[closestIndex];
+                    const pYest = hourly.precipitation[yesterdayIndex];
+                    const tToday = hourly.temperature_2m[closestIndex];
+                    const tYest = hourly.temperature_2m[yesterdayIndex];
+                    const hToday = hourly.relative_humidity_2m[closestIndex];
+                    const hYest = hourly.relative_humidity_2m[yesterdayIndex];
+
+                    // 변화 판별 우선순위에 따라 텍스트를 하나만 정합니다.
+                    if (pYest === 0 && pToday > 0) {
+                        changeText = "비 내림 ☔";
+                    } else if (pYest > 0 && pToday === 0) {
+                        changeText = "비 그침 ⛅";
+                    } else if (tToday - tYest >= 2) {
+                        changeText = "어제보다 더움 🥵";
+                    } else if (tYest - tToday >= 2) {
+                        changeText = "어제보다 추움 🥶";
+                    } else if (hToday - hYest >= 10) {
+                        changeText = "어제보다 습함 💦";
+                    } else if (hYest - hToday >= 10) {
+                        changeText = "어제보다 건조함 🌵";
+                    }
+                }
+
+                // ==========================================
+                // [3단계] 가져온 데이터를 화면에 표시하기
+                // ==========================================
+                
+                // HTML 요소들의 텍스트 내용을 서버에서 받아온 데이터로 교체합니다.
+                cityNameEl.textContent = displayName;
+                
+                // 비교 결과 뱃지 화면에 반영
+                comparisonEl.textContent = changeText;
+                comparisonEl.classList.remove('hidden');
+
+                tempEl.textContent = `${current.temperature_2m}°C`;
+                feelsLikeEl.textContent = `${current.apparent_temperature}°C`;
+                windEl.textContent = `${current.wind_speed_10m} km/h`;
+
+                // 로딩 메시지를 숨기고, 데이터를 채운 날씨 결과 영역을 보여줍니다.
+                statusMsg.classList.add('hidden');
+                resultDiv.classList.remove('hidden');
+
+            } catch (error) {
+                // try 블록 안에서 에러(네트워크 오류, 도시 검색 실패 등)가 발생하면 여기로 옵니다.
+                // 에러 메시지를 사용자에게 보여줍니다.
+                statusMsg.textContent = error.message;
+                statusMsg.className = 'text-red-500 text-sm font-bold mb-4 bg-red-50 py-2 px-4 rounded-xl inline-block';
+                statusMsg.classList.remove('hidden');
+                resultDiv.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
